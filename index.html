@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aura Scanner - GPU Accelerated AR Biometric Interface</title>
+  <meta name="description" content="A real-time camera-based augmented reality aura scanner. Uses remote photoplethysmography (rPPG) and GPU shaders to analyze and visualize biological energy fields.">
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- CDNs for WebGL (Three.js) and Computer Vision (MediaPipe Face Mesh) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous" defer></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header>
+      <div class="brand">
+        <div class="logo-icon"></div>
+        <h1>Aura Scanner</h1>
+      </div>
+      <div class="mode-toggle-group" id="mode-toggle-group">
+        <button class="mode-toggle-btn active" id="btn-mode-spectral">BIO-SPECTRAL</button>
+        <button class="mode-toggle-btn" id="btn-mode-clinical">CLINICAL</button>
+      </div>
+      <div class="system-status">
+        <span class="status-dot" id="system-status-dot"></span>
+        <span id="system-status-text">SYSTEM READY</span>
+      </div>
+    </header>
+
+    <!-- Left Pane: AR Camera Viewport -->
+    <main class="scanner-viewport">
+      <!-- Hidden Video Element -->
+      <video id="webcam" class="camera-feed" autoplay playsinline muted></video>
+      
+      <!-- Three.js GPU Rendering Canvas -->
+      <canvas id="ar-canvas" class="ar-overlay"></canvas>
+      
+      <!-- Calibration Dialog -->
+      <div id="calibration-overlay" class="calibration-overlay">
+        <div class="calibration-box">
+          <h2 class="calibration-title">AURA SCAN CALIBRATION</h2>
+          <p class="calibration-instructions">
+            Welcome to the Aura Scanner bio-spectral analyzer. To calibrate the rPPG sensor and compile the GPU shaders:<br><br>
+            1. Allow camera access when prompted.<br>
+            2. Center your face within the scanning reticle.<br>
+            3. Ensure stable, even lighting and remain still during scanning.
+          </p>
+          <button id="start-btn" class="start-btn">INITIALIZE CORE</button>
+          
+          <div class="progress-bar-container" id="progress-container">
+            <div class="progress-bar-fill" id="progress-bar"></div>
+          </div>
+          <span class="calibration-subtitle" id="calibration-status">COMPILING SHADERS...</span>
+        </div>
+      </div>
+
+      <!-- Live HUD Annotations -->
+      <div class="hud-layer">
+        <!-- Top corners: Camera specs and status -->
+        <div class="camera-status-hud">
+          <div class="hud-pill fps">GPU: <span id="gpu-fps">60</span> FPS</div>
+          <div class="hud-pill signal">BIOMETRIC SIGNAL: <span id="rppg-signal-status">CALIBRATING</span></div>
+        </div>
+        
+        <!-- Interactive Reticle -->
+        <div class="scanner-reticle" id="reticle">
+          <div class="corner-brackets"></div>
+          <div class="corner-brackets-bottom"></div>
+        </div>
+
+        <!-- Scanning instructions bar -->
+        <div class="instructions-bar" id="instruction-bar">
+          <span class="status-dot processing"></span>
+          <span id="instruction-text">POSITION FACE IN RETICLE</span>
+        </div>
+
+        <!-- Bottom controls: shader modes and report export -->
+        <div class="hud-bottom-actions">
+          <div class="hud-modes">
+            <button class="hud-btn active" data-mode="spirit">SPIRIT FLOW</button>
+            <button class="hud-btn" data-mode="flame">CHAKRA FLAME</button>
+            <button class="hud-btn" data-mode="astral">ASTRAL SPARKS</button>
+          </div>
+          <button id="export-report-btn" class="hud-btn active" style="background: linear-gradient(135deg, var(--primary-accent), var(--secondary-accent)); color: #000; font-weight: bold; display: none;">
+            GENERATE REPORT
+          </button>
+        </div>
+      </div>
+    </main>
+
+    <!-- Right Pane: Telemetry & Analysis Dashboard -->
+    <aside class="dashboard-panel">
+      <!-- Section 1: Real-time PPG Heart Wave -->
+      <section>
+        <h3 class="section-title">Blood Volume Pulse (BVP)</h3>
+        <div class="hud-card">
+          <div class="ppg-chart-container">
+            <canvas id="ppg-canvas" class="ppg-canvas"></canvas>
+            <div class="ppg-grid-overlay"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 2: Biometric Telemetry -->
+      <section>
+        <h3 class="section-title">Spectral Biometrics</h3>
+        <div class="hud-card">
+          <div class="radial-metrics">
+            <!-- Heart Rate (BPM) -->
+            <div class="radial-container">
+              <div class="svg-ring-container">
+                <svg class="svg-ring">
+                  <circle class="ring-bg" cx="55" cy="55" r="45"></circle>
+                  <circle class="ring-indicator" id="bpm-ring" cx="55" cy="55" r="45"></circle>
+                </svg>
+                <div class="ring-value">
+                  <span class="metric-number" id="bpm-val">--</span>
+                  <span class="metric-unit">BPM</span>
+                </div>
+              </div>
+              <span class="metric-label" id="bpm-label">Heart Rate</span>
+            </div>
+            
+            <!-- Heart Rate Variability (HRV / Stress) -->
+            <div class="radial-container">
+              <div class="svg-ring-container">
+                <svg class="svg-ring">
+                  <circle class="ring-bg" cx="55" cy="55" r="45"></circle>
+                  <circle class="ring-indicator hrv" id="hrv-ring" cx="55" cy="55" r="45"></circle>
+                </svg>
+                <div class="ring-value">
+                  <span class="metric-number" id="hrv-val">--</span>
+                  <span class="metric-unit">ms</span>
+                </div>
+              </div>
+              <span class="metric-label" id="hrv-label">HRV (Stress)</span>
+            </div>
+
+            <!-- SpO2 (Oxygen Saturation) - Visible only in Clinical Mode -->
+            <div class="radial-container spo2-container">
+              <div class="svg-ring-container">
+                <svg class="svg-ring">
+                  <circle class="ring-bg" cx="55" cy="55" r="45"></circle>
+                  <circle class="ring-indicator spo2" id="spo2-ring" cx="55" cy="55" r="45"></circle>
+                </svg>
+                <div class="ring-value">
+                  <span class="metric-number" id="spo2-val">--</span>
+                  <span class="metric-unit">%</span>
+                </div>
+              </div>
+              <span class="metric-label">SpO2</span>
+            </div>
+          </div>
+
+          <!-- Secondary Telemetry Grid -->
+          <div class="details-grid">
+            <div class="detail-item">
+              <span class="detail-label" id="detail-lbl-1">Vibrational Freq</span>
+              <span class="detail-value" id="vib-freq">-- Hz</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label" id="detail-lbl-2">Respiration Rate</span>
+              <span class="detail-value" id="resp-rate">-- rpm</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label" id="detail-lbl-3">Signal SNR</span>
+              <span class="detail-value" id="signal-snr">-- dB</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label" id="detail-lbl-4">Facial Tension</span>
+              <span class="detail-value" id="face-tension">--%</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 3: Aura State Analysis -->
+      <section id="aura-section">
+        <h3 class="section-title">Aura Field Analysis</h3>
+        <div class="hud-card aura-summary-panel">
+          <div class="aura-state-badge" id="aura-badge" style="background: rgba(255,255,255,0.05); color: var(--text-muted);">
+            AURA CALIBRATING...
+          </div>
+          <p class="aura-description" id="aura-desc">
+            Place your face in the scanning area to allow the bio-spectral system to synchronize with your autonomic nervous system.
+          </p>
+        </div>
+      </section>
+
+      <!-- Section 3 Clinical: Hemodynamic Assessment -->
+      <section id="clinical-diagnostics-section" style="display: none;">
+        <h3 class="section-title">Hemodynamic Assessment</h3>
+        <div class="hud-card aura-summary-panel">
+          <div class="aura-state-badge" id="clinical-badge" style="background: rgba(0, 243, 255, 0.05); color: var(--primary-accent); border-color: rgba(0, 243, 255, 0.2);">
+            CALIBRATING CLINICAL SENSORS...
+          </div>
+          <p class="aura-description" id="clinical-desc">
+            Establishing signal lock. The rPPG engine is measuring microvascular blood volume pulsations across facial regions of interest to compute cardiopulmonary telemetry.
+          </p>
+        </div>
+      </section>
+
+      <!-- Section 4: Chakra System Energy Bars -->
+      <section id="chakra-section">
+        <h3 class="section-title">Chakra Resonance</h3>
+        <div class="hud-card chakra-container">
+          <!-- Crown -->
+          <div class="chakra-bar-wrapper">
+            <span class="chakra-name" style="color: var(--chakra-violet);">Crown</span>
+            <div class="chakra-bar-bg">
+              <div class="chakra-bar-fill" id="chakra-crown" style="background: var(--chakra-violet); box-shadow: 0 0 6px var(--chakra-violet);"></div>
+            </div>
+            <span class="chakra-percent" id="chakra-percent-crown">0%</span>
+          </div>
+          
+          <!-- Third Eye -->
+          <div class="chakra-bar-wrapper">
+            <span class="chakra-name" style="color: var(--chakra-indigo);">Third Eye</span>
+            <div class="chakra-bar-bg">
+              <div class="chakra-bar-fill" id="chakra-thirdeye" style="background: var(--chakra-indigo); box-shadow: 0 0 6px var(--chakra-indigo);"></div>
+            </div>
+            <span class="chakra-percent" id="chakra-percent-thirdeye">0%</span>
+          </div>
+          
+          <!-- Throat -->
+          <div class="chakra-bar-wrapper">
+            <span class="chakra-name" style="color: var(--chakra-blue);">Throat</span>
+            <div class="chakra-bar-bg">
+              <div class="chakra-bar-fill" id="chakra-throat" style="background: var(--chakra-blue); box-shadow: 0 0 6px var(--chakra-blue);"></div>
+            </div>
+            <span class="chakra-percent" id="chakra-percent-throat">0%</span>
+          </div>
+          
+          <!-- Heart -->
+          <div class="chakra-bar-wrapper">
+            <span class="chakra-name" style="color: var(--chakra-green);">Heart</span>
+            <div class="chakra-bar-bg">
+              <div class="chakra-bar-fill" id="chakra-heart" style="background: var(--chakra-green); box-shadow: 0 0 6px var(--chakra-green);"></div>
+            </div>
+            <span class="chakra-percent" id="chakra-percent-heart">0%</span>
+          </div>
+          
+          <!-- Solar Plexus -->
+          <div class="chakra-bar-wrapper">
+            <span class="chakra-name" style="color: var(--chakra-yellow);">Solar Plexus</span>
+            <div class="chakra-bar-bg">
+              <div class="chakra-bar-fill" id="chakra-solar" style="background: var(--chakra-yellow); box-shadow: 0 0 6px var(--chakra-yellow);"></div>
+            </div>
+            <span class="chakra-percent" id="chakra-percent-solar">0%</span>
+          </div>
+          
+          <!-- Sacral -->
+          <div class="chakra-bar-wrapper">
+            <span class="chakra-name" style="color: var(--chakra-orange);">Sacral</span>
+            <div class="chakra-bar-bg">
+              <div class="chakra-bar-fill" id="chakra-sacral" style="background: var(--chakra-orange); box-shadow: 0 0 6px var(--chakra-orange);"></div>
+            </div>
+            <span class="chakra-percent" id="chakra-percent-sacral">0%</span>
+          </div>
+          
+          <!-- Root -->
+          <div class="chakra-bar-wrapper">
+            <span class="chakra-name" style="color: var(--chakra-red);">Root</span>
+            <div class="chakra-bar-bg">
+              <div class="chakra-bar-fill" id="chakra-root" style="background: var(--chakra-red); box-shadow: 0 0 6px var(--chakra-red);"></div>
+            </div>
+            <span class="chakra-percent" id="chakra-percent-root">0%</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Section 4 Clinical: Autonomic Balance -->
+      <section id="clinical-ans-section" style="display: none;">
+        <h3 class="section-title">Autonomic Balance</h3>
+        <div class="hud-card clinical-ans-container">
+          <div class="ans-balance-header">
+            <span class="ans-lbl sym">SYMPATHETIC (SNS)</span>
+            <span class="ans-lbl para">PARASYMPATHETIC (PNS)</span>
+          </div>
+          <div class="ans-split-bar">
+            <div class="ans-bar-fill sym" id="ans-bar-sym" style="width: 50%;"></div>
+            <div class="ans-bar-fill para" id="ans-bar-para" style="width: 50%;"></div>
+          </div>
+          <div class="ans-balance-values">
+            <span id="ans-val-sym">50%</span>
+            <span id="ans-val-para">50%</span>
+          </div>
+
+          <div class="clinical-hrv-grid" style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="detail-item">
+              <span class="detail-label">SDNN (HRV)</span>
+              <span class="detail-value" id="clinical-sdnn">-- ms</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">LF/HF Ratio</span>
+              <span class="detail-value" id="clinical-lfhf">--</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <!-- Bio-Analysis Report Modal -->
+  <div class="modal-backdrop" id="report-modal-backdrop">
+    <div class="report-modal">
+      <div class="report-header">
+        <div>
+          <h2 class="report-title" id="report-title-text">BIO-SPECTRAL AURA REPORT</h2>
+          <span class="report-timestamp" id="report-time">2026-06-10 21:22:42</span>
+        </div>
+        <button id="close-modal-btn" class="hud-btn">&times; CLOSE</button>
+      </div>
+
+      <div class="report-summary-box">
+        <div class="report-aura-circle" id="report-aura-indicator"></div>
+        <div>
+          <h3 id="report-aura-color" style="font-family: 'Orbitron', sans-serif; font-size: 1.2rem; margin-bottom: 4px;">-- Aura</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;" id="report-aura-type">State: Coherent</p>
+        </div>
+      </div>
+
+      <div class="report-stats-grid">
+        <div class="report-stat-card">
+          <span class="report-stat-label">HEART RATE</span>
+          <span class="report-stat-val" id="report-bpm">-- BPM</span>
+        </div>
+        <div class="report-stat-card">
+          <span class="report-stat-label" id="report-stat-lbl-2">HRV (STRESS)</span>
+          <span class="report-stat-val" id="report-hrv">-- ms</span>
+        </div>
+        <div class="report-stat-card">
+          <span class="report-stat-label" id="report-stat-lbl-3">ENERGY LEVEL</span>
+          <span class="report-stat-val" id="report-energy">--%</span>
+        </div>
+      </div>
+
+      <section>
+        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;" id="report-desc-title">Energy Field Description</h4>
+        <p class="report-text" id="report-long-desc">
+          Your aura report description is being compiled based on the spectral feedback of your photoplethysmography indicators.
+        </p>
+      </section>
+      
+      <section>
+        <h4 style="font-family: 'Orbitron', sans-serif; font-size: 0.8rem; letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase;" id="report-breakdown-title">Chakra Balance Metrics</h4>
+        <div id="report-chakra-breakdown" style="display: flex; flex-direction: column; gap: 6px;">
+          <!-- Will be filled by js -->
+        </div>
+      </section>
+
+      <div class="report-actions">
+        <button id="print-report-btn" class="hud-btn active" style="flex: 1; justify-content: center;">PRINT REPORT</button>
+        <button id="reset-scanner-btn" class="hud-btn" style="flex: 1; justify-content: center;">RE-SCAN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load script logic as modules -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
