@@ -103,6 +103,10 @@ $$RMSSD = \sqrt{\frac{1}{N-1} \sum_{i=2}^{N} (IBI_i - IBI_{i-1})^2}$$
 Reflects the total power of autonomic nervous system regulation:
 $$SDNN = \sqrt{\frac{1}{N} \sum_{i=1}^{N} (IBI_i - \mu_{IBI})^2}$$
 
+#### 3. pNN50 (Percentage of Successive NN Interval Differences > 50 ms)
+Reflects parasympathetic vagal heart rate regulation and stability:
+$$pNN50 = \frac{\text{Count}(|IBI_i - IBI_{i-1}| > 50\text{ ms})}{N-1} \times 100$$
+
 ### 4.3 Oxygen Saturation ($SpO_2$)
 Estimated via a calibration curve using the "Ratio-of-Ratios" ($R$) of the Red and Green AC/DC components:
 $$R = \frac{(AC/DC)_{Red}}{(AC/DC)_{Green}}$$
@@ -118,6 +122,11 @@ Tied to signal SNR to output a stable clinical perfusion range of $1.5\% - 5.0\%
 Calculated via an empirical regression model relating pulse waves to heart rate and muscle tension (squinting and eyebrow compression indices):
 $$SYS = 112 + 0.45 \cdot (BPM - 60) + 12 \cdot (\text{Tension}_{Facial})$$
 $$DIA = 72 + 0.25 \cdot (BPM - 60) + 8 \cdot (\text{Tension}_{Facial})$$
+
+### 4.6 Research Signal Customization & CSV Logging
+To facilitate health-tech and academic research, the engine provides an interactive **Research Sandbox**:
+- **Tunable DSP Filters**: Real-time high-pass (drift) and low-pass (noise) filter cutoffs can be tuned via sliders, which automatically recalculate the smoothing constants ($\alpha$ and $\beta$) of the dual-EMA bandpass filter.
+- **CSV Data Exporter**: Time-series log records of BVP signal amplitude, instantaneous heart rate, HRV parameters, and SpO2 values are buffered client-side in real time and can be downloaded as a standard `.csv` spreadsheet for external statistical analysis.
 
 ---
 

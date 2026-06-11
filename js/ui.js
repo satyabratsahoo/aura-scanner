@@ -50,8 +50,10 @@ export class UiController {
     
     this.clinicalSdnn = document.getElementById('clinical-sdnn');
     this.clinicalLfhf = document.getElementById('clinical-lfhf');
+    this.clinicalPnn50 = document.getElementById('clinical-pnn50');
 
     this.mode = 'aura'; // Default interface mode
+    this.csvLogHistory = []; // time-series biometric recording
 
     // Web Audio Synthesizer states
     this.audioCtx = null;
@@ -481,9 +483,29 @@ export class UiController {
 
       // 5. Update Clinical HRV detail fields
       if (this.clinicalSdnn) this.clinicalSdnn.textContent = sdnn > 0 ? `${sdnn} ms` : '-- ms';
+      if (this.clinicalPnn50) this.clinicalPnn50.textContent = biometrics.pnn50 > 0 ? `${biometrics.pnn50}%` : '--%';
       if (this.clinicalLfhf) {
         const ratio = bpm > 0 ? parseFloat(((100 - hrv) / Math.max(10, hrv) * 1.5).toFixed(2)) : 0;
         this.clinicalLfhf.textContent = ratio > 0 ? ratio : '--';
+      }
+
+      // 6. Record BVP history log for research export (at ~30 samples/sec)
+      if (bpm > 0) {
+        this.csvLogHistory.push({
+          timestamp: new Date().toISOString(),
+          bvp: biometrics.filteredValue.toFixed(6),
+          bpm: bpm,
+          hrv: hrv,
+          spo2: Math.round(spo2),
+          pi: pi,
+          sdnn: sdnn,
+          pnn50: biometrics.pnn50
+        });
+        
+        // Retain 1 minute of telemetry window (approx 1800 samples)
+        if (this.csvLogHistory.length > 1800) {
+          this.csvLogHistory.shift();
+        }
       }
     } else {
       // Reset color styling on tension text
@@ -762,5 +784,29 @@ export class UiController {
 
   closeReport() {
     document.getElementById('report-modal-backdrop').classList.remove('active');
+  }
+
+  downloadCsv() {
+    if (this.csvLogHistory.length === 0) {
+      alert("No biometric telemetry logged yet. Adjust face in reticle to complete calibration and begin streaming.");
+      return;
+    }
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Timestamp,BloodVolumePulse(BVP),HeartRate(BPM),HRV_RMSSD(ms),SpO2(%),PerfusionIndex(%),SDNN(ms),pNN50(%)\n";
+
+    this.csvLogHistory.forEach(row => {
+      csvContent += `${row.timestamp},${row.bvp},${row.bpm},${row.hrv},${row.spo2},${row.pi},${row.sdnn},${row.pnn50}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `aura_scanner_telemetry_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    console.log("Telemetry logs exported successfully.");
   }
 }

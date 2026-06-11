@@ -65,6 +65,39 @@ class AuraScannerApp {
       btnSpectral.addEventListener('click', () => this.switchInterfaceMode('aura'));
       btnClinical.addEventListener('click', () => this.switchInterfaceMode('clinical'));
     }
+
+    // Setup Research Sandbox Sliders and Export Listeners
+    const csvBtn = document.getElementById('export-csv-btn');
+    if (csvBtn) {
+      csvBtn.addEventListener('click', () => {
+        if (this.ui) this.ui.downloadCsv();
+      });
+    }
+
+    const hpSlider = document.getElementById('filter-hp-slider');
+    const lpSlider = document.getElementById('filter-lp-slider');
+    const hpValText = document.getElementById('hp-freq-val');
+    const lpValText = document.getElementById('lp-freq-val');
+
+    if (hpSlider && hpValText) {
+      hpSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        hpValText.textContent = `${val.toFixed(2)} Hz`;
+        if (this.rppg) {
+          this.rppg.setFilterCutoffs(this.rppg.lowpassCutoff, val);
+        }
+      });
+    }
+
+    if (lpSlider && lpValText) {
+      lpSlider.addEventListener('input', (e) => {
+        const val = parseFloat(e.target.value);
+        lpValText.textContent = `${val.toFixed(2)} Hz`;
+        if (this.rppg) {
+          this.rppg.setFilterCutoffs(val, this.rppg.highpassCutoff);
+        }
+      });
+    }
   }
 
   async initializeApplication() {

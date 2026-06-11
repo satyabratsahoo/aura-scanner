@@ -33,11 +33,14 @@ export class RppgEngine {
     this.bpm = 0;
     this.hrv = 0; // RMSSD in ms
     this.sdnn = 0; // SDNN in ms
+    this.pnn50 = 0; // percentage of adjacent beats > 50ms difference
     this.spo2 = 0;
     this.pi = 0;
     this.bloodPressure = '--/--';
     this.signalQuality = 0; // SNR in dB
     this.breathingRate = 16; // breathing rate in breaths per minute
+    this.highpassCutoff = 0.6; // Hz
+    this.lowpassCutoff = 3.5;  // Hz
     
     // Helper canvas for efficient pixel extraction
     this.helperCanvas = document.createElement('canvas');
@@ -56,6 +59,7 @@ export class RppgEngine {
     this.bpm = 0;
     this.hrv = 0;
     this.sdnn = 0;
+    this.pnn50 = 0;
     this.spo2 = 0;
     this.pi = 0;
     this.bloodPressure = '--/--';
@@ -237,6 +241,7 @@ export class RppgEngine {
       spo2: this.spo2,
       pi: this.pi,
       sdnn: this.sdnn,
+      pnn50: this.pnn50,
       bp: this.bloodPressure
     };
   }
@@ -318,6 +323,16 @@ export class RppgEngine {
     }
     this.sdnn = Math.round(Math.sqrt(sumSquaredDeviations / this.ibiList.length));
 
+    // Calculate pNN50 (percentage of beats with > 50ms successive differences)
+    let nn50Count = 0;
+    for (let i = 1; i < this.ibiList.length; i++) {
+      const diff = Math.abs(this.ibiList[i] - this.ibiList[i - 1]);
+      if (diff > 50) {
+        nn50Count++;
+      }
+    }
+    this.pnn50 = this.ibiList.length > 1 ? Math.round((nn50Count / (this.ibiList.length - 1)) * 100) : 0;
+
     // Estimate respiration rate based on Respiratory Sinus Arrhythmia (frequency of HRV fluctuations)
     // Healthy human respiration is ~12-18 breaths per minute
     // We can simulate breathing correlation based on the stress level
@@ -369,5 +384,22 @@ export class RppgEngine {
       // Signal-to-noise ratio in decibels
       this.signalQuality = Math.max(5, Math.min(28, parseFloat((20 * Math.log10(stdDev / noiseStdDev)).toFixed(1))));
     }
+  }
+
+  setFilterCutoffs(lowpassHz, highpassHz) {
+    this.lowpassCutoff = lowpassHz;
+    this.highpassCutoff = highpassHz;
+    
+    // Assume standard 30 FPS camera sampling rate
+    const fps = 30;
+    const dt = 1.0 / fps;
+
+    // lpAlpha = dt / (RC + dt), where RC = 1 / (2 * pi * f_c)
+    const lpRc = 1.0 / (2.0 * Math.PI * lowpassHz);
+    this.lpAlpha = dt / (lpRc + dt);
+
+    // hpAlpha = dt / (RC + dt), where RC = 1 / (2 * pi * f_c)
+    const hpRc = 1.0 / (2.0 * Math.PI * highpassHz);
+    this.hpAlpha = dt / (hpRc + dt);
   }
 }

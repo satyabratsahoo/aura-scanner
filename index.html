@@ -289,16 +289,44 @@
             <span id="ans-val-para">50%</span>
           </div>
 
-          <div class="clinical-hrv-grid" style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <div class="clinical-hrv-grid" style="margin-top: 15px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
             <div class="detail-item">
-              <span class="detail-label">SDNN (HRV)</span>
+              <span class="detail-label">SDNN</span>
               <span class="detail-value" id="clinical-sdnn">-- ms</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">pNN50</span>
+              <span class="detail-value" id="clinical-pnn50">--%</span>
             </div>
             <div class="detail-item">
               <span class="detail-label">LF/HF Ratio</span>
               <span class="detail-value" id="clinical-lfhf">--</span>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- Section 5 Clinical: Research Sandbox -->
+      <section id="clinical-research-section" style="display: none;">
+        <h3 class="section-title">Research Sandbox</h3>
+        <div class="hud-card research-container">
+          <div class="filter-controls">
+            <div class="control-header">
+              <span>High-Pass Filter (Drift)</span>
+              <span class="control-val" id="hp-freq-val">0.60 Hz</span>
+            </div>
+            <input type="range" id="filter-hp-slider" class="research-slider" min="0.1" max="1.5" step="0.05" value="0.6">
+            
+            <div class="control-header" style="margin-top: 10px;">
+              <span>Low-Pass Filter (Noise)</span>
+              <span class="control-val" id="lp-freq-val">3.50 Hz</span>
+            </div>
+            <input type="range" id="filter-lp-slider" class="research-slider" min="1.5" max="6.0" step="0.1" value="3.5">
+          </div>
+          
+          <button id="export-csv-btn" class="hud-btn active" style="width: 100%; justify-content: center; margin-top: 15px; background: rgba(0, 243, 255, 0.1); border-color: var(--primary-accent); font-weight: bold; pointer-events: auto;">
+            EXPORT RAW BVP LOG (CSV)
+          </button>
         </div>
       </section>
     </aside>
